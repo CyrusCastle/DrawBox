@@ -3,6 +3,7 @@ package io.github.markyav.drawbox.controller
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.unit.IntSize
+import io.github.markyav.drawbox.model.CanvasAction
 import io.github.markyav.drawbox.model.PathWrapper
 import io.github.markyav.drawbox.model.CanvasTool
 import io.github.markyav.drawbox.util.addNotNull
@@ -20,13 +21,11 @@ class DrawController {
     /** What tool are we using on the [Canvas] at the minute? */
     var canvasTool: MutableStateFlow<CanvasTool> = MutableStateFlow(CanvasTool.BRUSH)
 
-    /** A stateful list of [Path] that is drawn on the [Canvas]. */
-    private val drawnPaths: MutableStateFlow<List<PathWrapper>> = MutableStateFlow(emptyList())
-
     private val activeDrawingPath: MutableStateFlow<List<Offset>?> = MutableStateFlow(null)
 
-    /** A stateful list of [Path] that was drawn on the [Canvas] but user retracted his action. */
-    private val canceledPaths: MutableStateFlow<List<PathWrapper>> = MutableStateFlow(emptyList())
+    private val actions = MutableStateFlow<List<CanvasAction>>(emptyList())
+    private val drawnPaths = actions.mapState { getPathsFromActions(it) }
+    private val undoneActions = MutableStateFlow<List<CanvasAction>>(emptyList())
 
     val openedImage: MutableStateFlow<ImageBitmap?> = MutableStateFlow(null)
 
@@ -49,41 +48,41 @@ class DrawController {
     var background: MutableStateFlow<DrawBoxBackground> = MutableStateFlow(DrawBoxBackground.NoBackground)
 
     /** Indicate how many redos it is possible to do. */
-    val undoCount = drawnPaths.mapState { it.size }
+    val undoCount = actions.mapState { it.size }
 
     /** Indicate how many undos it is possible to do. */
-    val redoCount = canceledPaths.mapState { it.size }
+    val redoCount = undoneActions.mapState { it.size }
 
     /** Executes undo the drawn path if possible. */
     fun undo() {
-        if (drawnPaths.value.isNotEmpty()) {
-            val _drawnPaths = drawnPaths.value.toMutableList()
-            val _canceledPaths = canceledPaths.value.toMutableList()
+        if (actions.value.isNotEmpty()) {
+            val _actions = actions.value.toMutableList()
+            val _undoneActions = undoneActions.value.toMutableList()
 
-            _canceledPaths.add(_drawnPaths.removeLast())
+            _undoneActions.add(_actions.removeLast())
 
-            drawnPaths.value = _drawnPaths
-            canceledPaths.value = _canceledPaths
+            actions.value = _actions
+            undoneActions.value = _undoneActions
         }
     }
 
     /** Executes redo the drawn path if possible. */
     fun redo() {
-        if (canceledPaths.value.isNotEmpty()) {
-            val _drawnPaths = drawnPaths.value.toMutableList()
-            val _canceledPaths = canceledPaths.value.toMutableList()
+        if (undoneActions.value.isNotEmpty()) {
+            val _actions = actions.value.toMutableList()
+            val _undoneActions = undoneActions.value.toMutableList()
 
-            _drawnPaths.add(_canceledPaths.removeLast())
+            _actions.add(_undoneActions.removeLast())
 
-            drawnPaths.value = _drawnPaths
-            canceledPaths.value = _canceledPaths
+            actions.value = _actions
+            undoneActions.value = _undoneActions
         }
     }
 
     /** Clear drawn paths and the bitmap image. */
     fun reset() {
-        drawnPaths.value = emptyList()
-        canceledPaths.value = emptyList()
+        actions.value = emptyList()
+        undoneActions.value = emptyList()
     }
 
     fun open(image: ImageBitmap) {
@@ -127,14 +126,14 @@ class DrawController {
         (state.value as? DrawBoxConnectionState.Connected)?.let {
             require(activeDrawingPath.value == null)
             activeDrawingPath.value = listOf(newPoint.div(it.size.toFloat()))
-            canceledPaths.value = emptyList()
+            undoneActions.value = emptyList()
         }
     }
 
     internal fun finalizePath() {
         (state.value as? DrawBoxConnectionState.Connected)?.let {
             require(activeDrawingPath.value != null)
-            val _drawnPaths = drawnPaths.value.toMutableList()
+            val _actions = actions.value.toMutableList()
 
             // We need more than one point to draw a proper path, but we can point to the same place twice
             if (activeDrawingPath.value!!.size == 1){
@@ -147,15 +146,14 @@ class DrawController {
                 alpha = opacity.value,
                 strokeWidth = strokeWidth.value.div(it.size.toFloat()),
             )
-            _drawnPaths.add(pathWrapper)
+            _actions.add(CanvasAction.Draw(pathWrapper))
 
-            drawnPaths.value = _drawnPaths
+            actions.value = _actions
             activeDrawingPath.value = null
         }
     }
 
     internal fun finalizeEraserPath(){
-        // TODO, needs to handle undo/redo
         // TODO is sometimes unreliable, I think it's looking for each point, but it should check to see if our [p1] - [p2] intersects their [p1] - [p2]
 
         (state.value as? DrawBoxConnectionState.Connected)?.let {
@@ -164,13 +162,19 @@ class DrawController {
             val toRemove = mutableListOf<PathWrapper>()
             val _erasedPath = activeDrawingPath.value!!
 
-            for (pw in drawnPaths.value) {
-                if (pw.points.any { p -> _erasedPath.any { e -> e.minus(p).getDistance() < strokeWidth.value.div(it.size.toFloat()) } }) {
-                    toRemove.add(pw)
+            for (pw in actions.value) {
+                if (pw !is CanvasAction.Draw) continue
+
+                if (pw.path.points.any { p -> _erasedPath.any { e -> e.minus(p).getDistance() < strokeWidth.value.div(it.size.toFloat()) } }) {
+                    toRemove.add(pw.path)
                 }
             }
 
-            drawnPaths.value -= toRemove.toSet()
+            if (toRemove.isNotEmpty()) {
+                actions.value += CanvasAction.Erase(toRemove)
+                undoneActions.value = emptyList()
+            }
+
             activeDrawingPath.value = null
         }
     }
@@ -205,6 +209,19 @@ class DrawController {
                 strokeWidth = pw.strokeWidth * size
             )
         }
+    }
+
+    private fun getPathsFromActions(actions: List<CanvasAction>): List<PathWrapper> {
+        val result = mutableListOf<PathWrapper>()
+
+        actions.forEach { action ->
+            when(action) {
+                is CanvasAction.Draw -> result.add(action.path)
+                is CanvasAction.Erase -> result.removeAll(action.erased.toSet())
+            }
+        }
+
+        return result
     }
 
     fun getDrawPath(subscription: DrawBoxSubscription): StateFlow<List<PathWrapper>> {
