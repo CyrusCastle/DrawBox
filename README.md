@@ -6,6 +6,7 @@ This is the first multiplatform drawing library!
 
 - Cross-platform!
 - Customisable stoke size, color and opacity
+- Erase tool
 - Inbuilt Undo and Redo options
 - Reset option
 - Background with color/image
@@ -14,7 +15,6 @@ This is the first multiplatform drawing library!
 - Easy Implementations
 
 **Next releases:**
-- Erase tool
 - Import/export
 - Background content scale
 
@@ -57,7 +57,7 @@ This project was created by [Mark Yavorskyi](https://www.linkedin.com/in/mark-ya
 ## History
 I love my work.
 The idea of creating this open-source project appeared because I needed a multiplatform (Android + desktop) library for drawing.
-I fround several popular libs for Android but there was **ZERO** for using in KMM/KMP.
+I found several popular libs for Android but there was **ZERO** for using in KMM/KMP.
 I still have some aspects to improve and I will be happy if you share your feedback or propose an idea!
 
 Hope you enjoy it! \
