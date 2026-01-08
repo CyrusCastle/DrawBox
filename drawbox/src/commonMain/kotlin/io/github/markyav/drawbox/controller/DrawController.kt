@@ -4,7 +4,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.unit.IntSize
 import io.github.markyav.drawbox.model.PathWrapper
-import io.github.markyav.drawbox.model.Tool
+import io.github.markyav.drawbox.model.CanvasTool
 import io.github.markyav.drawbox.util.addNotNull
 import io.github.markyav.drawbox.util.combineStates
 import io.github.markyav.drawbox.util.createPath
@@ -18,7 +18,7 @@ class DrawController {
     private var state: MutableStateFlow<DrawBoxConnectionState> = MutableStateFlow(DrawBoxConnectionState.Disconnected)
 
     /** What tool are we using on the [Canvas] at the minute? */
-    var tool: MutableStateFlow<Tool> = MutableStateFlow(Tool.BRUSH)
+    var canvasTool: MutableStateFlow<CanvasTool> = MutableStateFlow(CanvasTool.BRUSH)
 
     /** A stateful list of [Path] that is drawn on the [Canvas]. */
     private val drawnPaths: MutableStateFlow<List<PathWrapper>> = MutableStateFlow(emptyList())
@@ -106,9 +106,9 @@ class DrawController {
     internal fun onDragEnd(){
         if (!enabled.value) return
 
-        when (tool.value){
-            Tool.BRUSH -> finalizePath()
-            Tool.ERASER -> finalizeEraserPath()
+        when (canvasTool.value){
+            CanvasTool.BRUSH -> finalizePath()
+            CanvasTool.ERASER -> finalizeEraserPath()
         }
     }
 
@@ -191,9 +191,9 @@ class DrawController {
 
         insertNewPath(newPoint)
 
-        when (tool.value){
-            Tool.BRUSH -> finalizePath()
-            Tool.ERASER -> finalizeEraserPath()
+        when (canvasTool.value){
+            CanvasTool.BRUSH -> finalizePath()
+            CanvasTool.ERASER -> finalizeEraserPath()
         }
     }
 
@@ -220,8 +220,8 @@ class DrawController {
             (state.value as? DrawBoxConnectionState.Connected)?.let {
                 val pathWrapper = PathWrapper(
                     points = activeDrawingPath.value ?: emptyList(),
-                    strokeColor = if (tool.value == Tool.BRUSH) color.value else Color.Red,
-                    alpha = if (tool.value == Tool.BRUSH) opacity.value else 0.8f,
+                    strokeColor = if (canvasTool.value == CanvasTool.BRUSH) color.value else Color.Red,
+                    alpha = if (canvasTool.value == CanvasTool.BRUSH) opacity.value else 0.8f,
                     strokeWidth = strokeWidth.value.div(it.size.toFloat()),
                 )
                 _a.addNotNull(pathWrapper)

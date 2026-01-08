@@ -1,6 +1,6 @@
 package io.github.markyav.drawbox.model
 
-enum class Tool {
+enum class CanvasTool {
     BRUSH,
     ERASER;
 }
