@@ -1,6 +1,5 @@
 package io.github.markyav.drawbox.controller
 
-import androidx.compose.runtime.*
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.unit.IntSize
@@ -38,6 +37,9 @@ class DrawController {
 
     /** A [color] of the stroke */
     var color: MutableStateFlow<Color> = MutableStateFlow(Color.Red)
+
+    /** Whether the controller should register any strokes */
+    var enabled: MutableStateFlow<Boolean> = MutableStateFlow(true)
 
     /** A [background] of the background of DrawBox */
     var background: MutableStateFlow<DrawBoxBackground> = MutableStateFlow(DrawBoxBackground.NoBackground)
@@ -87,6 +89,8 @@ class DrawController {
 
     /** Call this function when user starts drawing a path. */
     internal fun updateLatestPath(newPoint: Offset) {
+        if (!enabled.value) return
+
         (state.value as? DrawBoxConnectionState.Connected)?.let {
             require(activeDrawingPath.value != null)
             val list = activeDrawingPath.value!!.toMutableList()
@@ -97,6 +101,8 @@ class DrawController {
 
     /** When dragging call this function to update the last path. */
     internal fun insertNewPath(newPoint: Offset) {
+        if (!enabled.value) return
+
         (state.value as? DrawBoxConnectionState.Connected)?.let {
             require(activeDrawingPath.value == null)
             /*val pathWrapper = PathWrapper(
@@ -111,6 +117,8 @@ class DrawController {
     }
 
     internal fun finalizePath() {
+        if (!enabled.value) return
+
         (state.value as? DrawBoxConnectionState.Connected)?.let {
             require(activeDrawingPath.value != null)
             val _drawnPaths = drawnPaths.value.toMutableList()
@@ -140,6 +148,8 @@ class DrawController {
     }
 
     internal fun onTap(newPoint: Offset) {
+        if (!enabled.value) return
+
         insertNewPath(newPoint)
         finalizePath()
     }
