@@ -4,6 +4,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.unit.IntSize
 import io.github.markyav.drawbox.model.PathWrapper
+import io.github.markyav.drawbox.model.Tool
 import io.github.markyav.drawbox.util.addNotNull
 import io.github.markyav.drawbox.util.combineStates
 import io.github.markyav.drawbox.util.createPath
@@ -15,6 +16,9 @@ import kotlinx.coroutines.flow.*
  */
 class DrawController {
     private var state: MutableStateFlow<DrawBoxConnectionState> = MutableStateFlow(DrawBoxConnectionState.Disconnected)
+
+    /** What tool are we using on the [Canvas] at the minute? */
+    var tool: MutableStateFlow<Tool> = MutableStateFlow(Tool.BRUSH)
 
     /** A stateful list of [Path] that is drawn on the [Canvas]. */
     private val drawnPaths: MutableStateFlow<List<PathWrapper>> = MutableStateFlow(emptyList())
@@ -87,10 +91,29 @@ class DrawController {
         openedImage.value = image
     }
 
-    /** Call this function when user starts drawing a path. */
-    internal fun updateLatestPath(newPoint: Offset) {
+    internal fun onDragStart(newPoint: Offset) {
         if (!enabled.value) return
 
+        insertNewPath(newPoint)
+    }
+
+    internal fun onDrag(newPoint: Offset){
+        if (!enabled.value) return
+
+        updateLatestPath(newPoint)
+    }
+
+    internal fun onDragEnd(){
+        if (!enabled.value) return
+
+        when (tool.value){
+            Tool.BRUSH -> finalizePath()
+            Tool.ERASER -> finalizeEraserPath()
+        }
+    }
+
+    /** Call this function when user starts drawing a path. */
+    internal fun updateLatestPath(newPoint: Offset) {
         (state.value as? DrawBoxConnectionState.Connected)?.let {
             require(activeDrawingPath.value != null)
             val list = activeDrawingPath.value!!.toMutableList()
@@ -101,24 +124,14 @@ class DrawController {
 
     /** When dragging call this function to update the last path. */
     internal fun insertNewPath(newPoint: Offset) {
-        if (!enabled.value) return
-
         (state.value as? DrawBoxConnectionState.Connected)?.let {
             require(activeDrawingPath.value == null)
-            /*val pathWrapper = PathWrapper(
-                points = mutableStateListOf(newPoint.div(it.size.toFloat())),
-                strokeColor = color.value,
-                alpha = opacity.value,
-                strokeWidth = strokeWidth.value.div(it.size.toFloat()),
-            )*/
             activeDrawingPath.value = listOf(newPoint.div(it.size.toFloat()))
             canceledPaths.value = emptyList()
         }
     }
 
     internal fun finalizePath() {
-        if (!enabled.value) return
-
         (state.value as? DrawBoxConnectionState.Connected)?.let {
             require(activeDrawingPath.value != null)
             val _drawnPaths = drawnPaths.value.toMutableList()
@@ -132,6 +145,28 @@ class DrawController {
             _drawnPaths.add(pathWrapper)
 
             drawnPaths.value = _drawnPaths
+            activeDrawingPath.value = null
+        }
+    }
+
+    internal fun finalizeEraserPath(){
+        // TODO should handle onTap as well
+        // TODO, needs to handle undo/redo
+        // TODO is sometimes unreliable, I think it's looking for each point, but it should check to see if our [p1] - [p2] intersects their [p1] - [p2]
+
+        (state.value as? DrawBoxConnectionState.Connected)?.let {
+            require(activeDrawingPath.value != null)
+
+            val toRemove = mutableListOf<PathWrapper>()
+            val _erasedPath = activeDrawingPath.value!!
+
+            for (pw in drawnPaths.value) {
+                if (pw.points.any { p -> _erasedPath.any { e -> e.minus(p).getDistance() < strokeWidth.value.div(it.size.toFloat()) } }) {
+                    toRemove.add(pw)
+                }
+            }
+
+            drawnPaths.value -= toRemove.toSet()
             activeDrawingPath.value = null
         }
     }
@@ -177,8 +212,8 @@ class DrawController {
             (state.value as? DrawBoxConnectionState.Connected)?.let {
                 val pathWrapper = PathWrapper(
                     points = activeDrawingPath.value ?: emptyList(),
-                    strokeColor = color.value,
-                    alpha = opacity.value,
+                    strokeColor = if (tool.value == Tool.BRUSH) color.value else Color.Red,
+                    alpha = if (tool.value == Tool.BRUSH) opacity.value else 0.8f,
                     strokeWidth = strokeWidth.value.div(it.size.toFloat()),
                 )
                 _a.addNotNull(pathWrapper)

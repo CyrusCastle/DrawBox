@@ -31,9 +31,9 @@ fun DrawBox(
             alpha = canvasOpacity,
             onSizeChanged = controller::connectToDrawBox,
             onTap = controller::onTap,
-            onDragStart = controller::insertNewPath,
-            onDrag = controller::updateLatestPath,
-            onDragEnd = controller::finalizePath,
+            onDragStart = controller::onDragStart,
+            onDrag = controller::onDrag,
+            onDragEnd = controller::onDragEnd,
             modifier = Modifier.fillMaxSize(),
         )
     }
