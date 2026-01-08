@@ -136,6 +136,11 @@ class DrawController {
             require(activeDrawingPath.value != null)
             val _drawnPaths = drawnPaths.value.toMutableList()
 
+            // We need more than one point to draw a proper path, but we can point to the same place twice
+            if (activeDrawingPath.value!!.size == 1){
+                updateLatestPath(activeDrawingPath.value!![0].times(it.size.toFloat()))
+            }
+
             val pathWrapper = PathWrapper(
                 points = activeDrawingPath.value!!,
                 strokeColor = color.value,
@@ -150,7 +155,6 @@ class DrawController {
     }
 
     internal fun finalizeEraserPath(){
-        // TODO should handle onTap as well
         // TODO, needs to handle undo/redo
         // TODO is sometimes unreliable, I think it's looking for each point, but it should check to see if our [p1] - [p2] intersects their [p1] - [p2]
 
@@ -186,7 +190,11 @@ class DrawController {
         if (!enabled.value) return
 
         insertNewPath(newPoint)
-        finalizePath()
+
+        when (tool.value){
+            Tool.BRUSH -> finalizePath()
+            Tool.ERASER -> finalizeEraserPath()
+        }
     }
 
     private fun List<PathWrapper>.scale(size: Float): List<PathWrapper> {
